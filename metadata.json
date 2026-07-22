@@ -1,0 +1,6 @@
+{
+  "name": "PDF Translator AI",
+  "description": "Translate any PDF files containing text or images into multiple languages using Gemini Multimodal AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
