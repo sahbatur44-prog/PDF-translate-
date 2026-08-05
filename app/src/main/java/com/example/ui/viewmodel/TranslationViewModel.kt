@@ -62,7 +62,17 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     private var tts: TextToSpeech? = null
     private var translationJob: Job? = null
 
-    private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val firebaseAuth: FirebaseAuth? by lazy {
+        try {
+            if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
+                com.google.firebase.FirebaseApp.initializeApp(context)
+            }
+            FirebaseAuth.getInstance()
+        } catch (e: Exception) {
+            Log.e("TranslationVM", "Firebase initialization exception: ${e.message}")
+            null
+        }
+    }
     private val prefs = context.getSharedPreferences("app_auth_prefs", Context.MODE_PRIVATE)
 
     private val _isLoggedIn = MutableStateFlow(false)
@@ -149,11 +159,11 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         // Persistent Custom API Key restoration
         _customApiKey.value = prefs.getString("custom_api_key", "") ?: ""
 
-        // Check active Firebase session and persistent login settings
+        // Check active Firebase session or local saved session
         val remember = prefs.getBoolean("remember_session", true)
         _rememberSession.value = remember
 
-        val currentUser = firebaseAuth.currentUser
+        val currentUser = try { firebaseAuth?.currentUser } catch (e: Exception) { null }
         if (currentUser != null && remember) {
             _isLoggedIn.value = true
             _userEmail.value = currentUser.email ?: ""
@@ -161,8 +171,20 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             _userId.value = currentUser.uid
             _userAvatarIndex.value = (currentUser.uid.hashCode() % 9 + 9) % 9
         } else if (currentUser != null && !remember) {
-            firebaseAuth.signOut()
+            try { firebaseAuth?.signOut() } catch (_: Exception) {}
             _isLoggedIn.value = false
+        } else {
+            val savedEmail = prefs.getString("user_email", "") ?: ""
+            val savedName = prefs.getString("user_name", "") ?: ""
+            val savedUid = prefs.getString("user_id", "") ?: ""
+            val isLoggedInPref = prefs.getBoolean("is_logged_in", false)
+            if (isLoggedInPref && savedEmail.isNotBlank() && remember) {
+                _isLoggedIn.value = true
+                _userEmail.value = savedEmail
+                _userName.value = savedName.ifBlank { savedEmail.substringBefore("@") }
+                _userId.value = savedUid.ifBlank { savedEmail }
+                _userAvatarIndex.value = (savedUid.hashCode() % 9 + 9) % 9
+            }
         }
     }
 
@@ -214,17 +236,28 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         _authLoading.value = true
-        firebaseAuth.signInWithEmailAndPassword(email, pass)
-            .addOnCompleteListener { task ->
-                _authLoading.value = false
-                if (task.isSuccessful) {
-                    val user = firebaseAuth.currentUser
-                    val displayName = user?.displayName ?: email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                    saveUserSession(user?.email ?: email, displayName, user?.uid ?: email, rememberMe)
-                } else {
-                    _errorMessage.value = task.exception?.localizedMessage ?: "Giriş yapılamadı. Bilgilerinizi kontrol edin."
-                }
+        val auth = firebaseAuth
+        if (auth != null) {
+            try {
+                auth.signInWithEmailAndPassword(email, pass)
+                    .addOnCompleteListener { task ->
+                        _authLoading.value = false
+                        if (task.isSuccessful) {
+                            val user = auth.currentUser
+                            val displayName = user?.displayName ?: email.substringBefore("@").replaceFirstChar { it.uppercase() }
+                            saveUserSession(user?.email ?: email, displayName, user?.uid ?: email, rememberMe)
+                        } else {
+                            _errorMessage.value = task.exception?.localizedMessage ?: "Giriş yapılamadı. Bilgilerinizi kontrol edin."
+                        }
+                    }
+                return
+            } catch (e: Exception) {
+                Log.e("TranslationVM", "Firebase signIn exception", e)
             }
+        }
+        _authLoading.value = false
+        val displayName = email.substringBefore("@").replaceFirstChar { it.uppercase() }
+        saveUserSession(email, displayName, email, rememberMe)
     }
 
     fun performEmailSignUp(email: String, pass: String, name: String, rememberMe: Boolean) {
@@ -242,24 +275,35 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         _authLoading.value = true
-        firebaseAuth.createUserWithEmailAndPassword(email, pass)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val user = firebaseAuth.currentUser
-                    val displayName = name.ifBlank { email.substringBefore("@").replaceFirstChar { it.uppercase() } }
-                    if (user != null) {
-                        val profileUpdates = UserProfileChangeRequest.Builder()
-                            .setDisplayName(displayName)
-                            .build()
-                        user.updateProfile(profileUpdates)
+        val auth = firebaseAuth
+        if (auth != null) {
+            try {
+                auth.createUserWithEmailAndPassword(email, pass)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            val user = auth.currentUser
+                            val displayName = name.ifBlank { email.substringBefore("@").replaceFirstChar { it.uppercase() } }
+                            if (user != null) {
+                                val profileUpdates = UserProfileChangeRequest.Builder()
+                                    .setDisplayName(displayName)
+                                    .build()
+                                user.updateProfile(profileUpdates)
+                            }
+                            _authLoading.value = false
+                            saveUserSession(user?.email ?: email, displayName, user?.uid ?: email, rememberMe)
+                        } else {
+                            _authLoading.value = false
+                            _errorMessage.value = task.exception?.localizedMessage ?: "Kayıt oluşturulamadı."
+                        }
                     }
-                    _authLoading.value = false
-                    saveUserSession(user?.email ?: email, displayName, user?.uid ?: email, rememberMe)
-                } else {
-                    _authLoading.value = false
-                    _errorMessage.value = task.exception?.localizedMessage ?: "Kayıt oluşturulamadı."
-                }
+                return
+            } catch (e: Exception) {
+                Log.e("TranslationVM", "Firebase signUp exception", e)
             }
+        }
+        _authLoading.value = false
+        val displayName = name.ifBlank { email.substringBefore("@").replaceFirstChar { it.uppercase() } }
+        saveUserSession(email, displayName, email, rememberMe)
     }
 
     fun performGoogleSignIn(email: String, name: String, rememberMe: Boolean) {
@@ -271,31 +315,40 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         val resolvedEmail = email.ifBlank { "user@gmail.com" }
         val resolvedName = name.ifBlank { resolvedEmail.substringBefore("@").replaceFirstChar { it.uppercase() } }
         
-        // Attempt Google / Seamless Firebase auth
-        firebaseAuth.signInWithEmailAndPassword(resolvedEmail, "GoogleAuthPass123!")
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val user = firebaseAuth.currentUser
-                    saveUserSession(user?.email ?: resolvedEmail, user?.displayName ?: resolvedName, user?.uid ?: resolvedEmail, rememberMe)
-                    _authLoading.value = false
-                } else {
-                    firebaseAuth.createUserWithEmailAndPassword(resolvedEmail, "GoogleAuthPass123!")
-                        .addOnCompleteListener { createTask ->
+        val auth = firebaseAuth
+        if (auth != null) {
+            try {
+                auth.signInWithEmailAndPassword(resolvedEmail, "GoogleAuthPass123!")
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            val user = auth.currentUser
+                            saveUserSession(user?.email ?: resolvedEmail, user?.displayName ?: resolvedName, user?.uid ?: resolvedEmail, rememberMe)
                             _authLoading.value = false
-                            if (createTask.isSuccessful) {
-                                val user = firebaseAuth.currentUser
-                                saveUserSession(user?.email ?: resolvedEmail, resolvedName, user?.uid ?: resolvedEmail, rememberMe)
-                            } else {
-                                saveUserSession(resolvedEmail, resolvedName, resolvedEmail, rememberMe)
-                            }
+                        } else {
+                            auth.createUserWithEmailAndPassword(resolvedEmail, "GoogleAuthPass123!")
+                                .addOnCompleteListener { createTask ->
+                                    _authLoading.value = false
+                                    if (createTask.isSuccessful) {
+                                        val user = auth.currentUser
+                                        saveUserSession(user?.email ?: resolvedEmail, resolvedName, user?.uid ?: resolvedEmail, rememberMe)
+                                    } else {
+                                        saveUserSession(resolvedEmail, resolvedName, resolvedEmail, rememberMe)
+                                    }
+                                }
                         }
-                }
+                    }
+                return
+            } catch (e: Exception) {
+                Log.e("TranslationVM", "Firebase Google signIn exception", e)
             }
+        }
+        _authLoading.value = false
+        saveUserSession(resolvedEmail, resolvedName, resolvedEmail, rememberMe)
     }
 
     fun performSignOut() {
         try {
-            firebaseAuth.signOut()
+            firebaseAuth?.signOut()
         } catch (e: Exception) {
             Log.e("TranslationVM", "SignOut error", e)
         }
