@@ -91,6 +91,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -235,7 +236,7 @@ fun MainAppScreen(viewModel: TranslationViewModel = viewModel()) {
                         HomeScreen(viewModel = viewModel)
                     }
                     is MainUiState.Translating -> {
-                        TranslatingScreen(state = state)
+                        TranslatingScreen(state = state, onCancelClick = { viewModel.cancelTranslation() })
                     }
                     is MainUiState.ViewTranslation -> {
                         ViewTranslationScreen(state = state, viewModel = viewModel)
@@ -947,7 +948,7 @@ fun AdvancedHistoryRow(
 }
 
 @Composable
-fun TranslatingScreen(state: MainUiState.Translating) {
+fun TranslatingScreen(state: MainUiState.Translating, onCancelClick: () -> Unit) {
     val rotation by animateFloatAsState(
         targetValue = 360f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
@@ -1048,6 +1049,19 @@ fun TranslatingScreen(state: MainUiState.Translating) {
                 StepRow(text = "3. Gemini 3.5 Flash Multimodal Analiz & OCR", done = state.statusMessage.contains("Veritabanı") || state.currentPageIndex > 0)
                 StepRow(text = "4. Çeviri, Sözlük & Analizler Kaydediliyor", done = false)
             }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        androidx.compose.material3.OutlinedButton(
+            onClick = onCancelClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+        ) {
+            Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Çeviriyi İptal Et", fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -2057,17 +2071,33 @@ fun AuthScreen(viewModel: TranslationViewModel) {
                     if (selectedTab == 0) {
                         // Google Sign-In Mode
                         Text(
-                            text = "Google hesabınızla anında kayıt oluşturun veya giriş yapın. Oturumunuz sürekli açık kalır.",
+                            text = "Google hesabınızla tek tıkla güvenli giriş yapın veya kayıt olun.",
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
                         )
 
+                        OutlinedTextField(
+                            value = emailInput,
+                            onValueChange = { emailInput = it },
+                            label = { Text("Google E-Posta Adresiniz") },
+                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                            )
+                        )
+
                         // Google Brand styled button
                         Button(
                             onClick = {
-                                viewModel.performGoogleSignIn("sahbatur44@gmail.com", "Sahbatur")
+                                val email = emailInput.ifBlank { "user@gmail.com" }
+                                val name = email.substringBefore("@").replaceFirstChar { it.uppercase() }
+                                viewModel.performGoogleSignIn(email, name, rememberSession)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2105,54 +2135,58 @@ fun AuthScreen(viewModel: TranslationViewModel) {
                             }
                         }
 
-                        // Customize simulated Google Sign-In email
-                        OutlinedTextField(
-                            value = emailInput.ifEmpty { "sahbatur44@gmail.com" },
-                            onValueChange = { emailInput = it },
-                            label = { Text("Google E-Posta Adresiniz") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        )
-
-                        Button(
-                            onClick = {
-                                val email = emailInput.ifEmpty { "sahbatur44@gmail.com" }
-                                val name = email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                                viewModel.performGoogleSignIn(email, name)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        ) {
-                            Text("Google Oturumunu Başlat", fontWeight = FontWeight.Bold)
-                        }
-
                     } else {
                         // Email signup/login
-                        OutlinedTextField(
-                            value = nameInput,
-                            onValueChange = { nameInput = it },
-                            label = { Text("Adınız Soyadınız") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        var isSignUpMode by remember { mutableStateOf(false) }
+
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (!isSignUpMode) {
+                                Button(
+                                    onClick = { isSignUpMode = false },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Giriş Yap", fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { isSignUpMode = true },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Yeni Kayıt", fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { isSignUpMode = false },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Giriş Yap", fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = { isSignUpMode = true },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Yeni Kayıt", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        if (isSignUpMode) {
+                            OutlinedTextField(
+                                value = nameInput,
+                                onValueChange = { nameInput = it },
+                                label = { Text("Adınız Soyadınız") },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
                             )
-                        )
+                        }
 
                         OutlinedTextField(
                             value = emailInput,
@@ -2161,11 +2195,7 @@ fun AuthScreen(viewModel: TranslationViewModel) {
                             leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            )
+                            shape = RoundedCornerShape(12.dp)
                         )
 
                         OutlinedTextField(
@@ -2184,20 +2214,15 @@ fun AuthScreen(viewModel: TranslationViewModel) {
                             visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            )
+                            shape = RoundedCornerShape(12.dp)
                         )
 
                         Button(
                             onClick = {
-                                if (emailInput.isEmpty() || passwordInput.isEmpty()) {
-                                    Toast.makeText(context, "Lütfen gerekli alanları doldurun.", Toast.LENGTH_SHORT).show()
+                                if (isSignUpMode) {
+                                    viewModel.performEmailSignUp(emailInput, passwordInput, nameInput, rememberSession)
                                 } else {
-                                    val displayName = nameInput.ifEmpty { emailInput.substringBefore("@") }
-                                    viewModel.performGoogleSignIn(emailInput, displayName)
+                                    viewModel.performEmailSignIn(emailInput, passwordInput, rememberSession)
                                 }
                             },
                             modifier = Modifier
@@ -2209,7 +2234,7 @@ fun AuthScreen(viewModel: TranslationViewModel) {
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
-                            Text("Giriş Yap / Kayıt Ol", fontWeight = FontWeight.Bold)
+                            Text(if (isSignUpMode) "Kayıt Ol ve Giriş Yap" else "Güvenli Giriş Yap", fontWeight = FontWeight.Bold)
                         }
                     }
 

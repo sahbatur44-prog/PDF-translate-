@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import com.example.data.model.TranslationHistory
 import com.example.data.model.TranslatedPage
 
-@Database(entities = [TranslationHistory::class, TranslatedPage::class], version = 1, exportSchema = false)
+@Database(entities = [TranslationHistory::class, TranslatedPage::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun translationDao(): TranslationDao
 

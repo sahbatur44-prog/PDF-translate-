@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "translation_history")
 data class TranslationHistory(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val userId: String = "",
     val fileName: String,
     val sourceLang: String,
     val targetLang: String,

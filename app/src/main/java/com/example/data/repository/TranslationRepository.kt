@@ -6,10 +6,20 @@ import com.example.data.model.TranslatedPage
 import kotlinx.coroutines.flow.Flow
 
 class TranslationRepository(private val translationDao: TranslationDao) {
-    val allHistory: Flow<List<TranslationHistory>> = translationDao.getAllHistory()
+    fun getAllHistoryForUser(userId: String): Flow<List<TranslationHistory>> {
+        return translationDao.getAllHistoryForUser(userId)
+    }
 
     fun getPagesForHistory(historyId: Int): Flow<List<TranslatedPage>> {
         return translationDao.getPagesForHistory(historyId)
+    }
+
+    suspend fun getPagesListForHistory(historyId: Int): List<TranslatedPage> {
+        return translationDao.getPagesListForHistory(historyId)
+    }
+
+    suspend fun getAllPagesListForUser(userId: String): List<TranslatedPage> {
+        return translationDao.getAllPagesListForUser(userId)
     }
 
     suspend fun insertHistory(history: TranslationHistory): Int {
@@ -20,8 +30,8 @@ class TranslationRepository(private val translationDao: TranslationDao) {
         translationDao.insertPage(page)
     }
 
-    suspend fun deleteHistory(historyId: Int) {
-        translationDao.deleteHistoryById(historyId)
+    suspend fun deleteHistoryForUser(historyId: Int, userId: String) {
+        translationDao.deleteHistoryByIdForUser(historyId, userId)
     }
 
     suspend fun toggleBookmark(historyId: Int, isBookmarked: Boolean) {
@@ -32,7 +42,7 @@ class TranslationRepository(private val translationDao: TranslationDao) {
         translationDao.updatePageNotes(pageId, notes)
     }
 
-    suspend fun clearAllHistory() {
-        translationDao.clearAllHistory()
+    suspend fun clearAllHistoryForUser(userId: String) {
+        translationDao.clearAllHistoryForUser(userId)
     }
 }
