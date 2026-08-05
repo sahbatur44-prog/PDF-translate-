@@ -161,10 +161,8 @@ class MainActivity : ComponentActivity() {
 fun MainAppScreen(viewModel: TranslationViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val context = LocalContext.current
     var showHelpDialog by remember { mutableStateOf(false) }
-    var showProfileDialog by remember { mutableStateOf(false) }
 
     remember(errorMessage) {
         errorMessage?.let {
@@ -173,92 +171,76 @@ fun MainAppScreen(viewModel: TranslationViewModel = viewModel()) {
         }
     }
 
-    if (!isLoggedIn) {
-        AuthScreen(viewModel = viewModel)
-    } else {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Google PDF Çevirici",
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                },
+                navigationIcon = {
+                    if (uiState !is MainUiState.Home) {
+                        IconButton(onClick = { 
+                            viewModel.stopSpeaking()
+                            viewModel.navigateToHome() 
+                        }) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "PDF Translator AI",
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        if (uiState !is MainUiState.Home) {
-                            IconButton(onClick = { 
-                                viewModel.stopSpeaking()
-                                viewModel.navigateToHome() 
-                            }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Default.ArrowBack,
-                                    contentDescription = "Geri Dön"
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    actions = {
-                        IconButton(onClick = { showProfileDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.AccountCircle,
-                                contentDescription = "Profilim",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(onClick = { showHelpDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Hakkında ve Yardım"
+                                imageVector = Icons.AutoMirrored.Default.ArrowBack,
+                                contentDescription = "Geri Dön"
                             )
                         }
                     }
-                )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                actions = {
+                    IconButton(onClick = { showHelpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Hakkında ve Yardım"
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            when (val state = uiState) {
+                is MainUiState.Home -> {
+                    HomeScreen(viewModel = viewModel)
+                }
+                is MainUiState.Translating -> {
+                    TranslatingScreen(state = state, onCancelClick = { viewModel.cancelTranslation() })
+                }
+                is MainUiState.ViewTranslation -> {
+                    ViewTranslationScreen(state = state, viewModel = viewModel)
+                }
             }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
-                when (val state = uiState) {
-                    is MainUiState.Home -> {
-                        HomeScreen(viewModel = viewModel)
-                    }
-                    is MainUiState.Translating -> {
-                        TranslatingScreen(state = state, onCancelClick = { viewModel.cancelTranslation() })
-                    }
-                    is MainUiState.ViewTranslation -> {
-                        ViewTranslationScreen(state = state, viewModel = viewModel)
-                    }
-                }
 
-                // Help & Guide Dialog
-                if (showHelpDialog) {
-                    HelpGuideDialog(onDismiss = { showHelpDialog = false })
-                }
-
-                // Profile & Google Account Settings Dialog
-                if (showProfileDialog) {
-                    ProfileDialog(viewModel = viewModel, onDismiss = { showProfileDialog = false })
-                }
+            // Help & Guide Dialog
+            if (showHelpDialog) {
+                HelpGuideDialog(onDismiss = { showHelpDialog = false })
             }
         }
     }
@@ -554,24 +536,7 @@ fun HomeScreen(viewModel: TranslationViewModel) {
                             )
                         }
 
-                        // Custom API Key Overrider
-                        Column {
-                            Text(text = "Özel Gemini API Key (Opsiyonel)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(text = "Boş bırakılırsa AI Studio'daki gizli anahtarınız kullanılır.", fontSize = 10.sp, color = Color.Gray)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            OutlinedTextField(
-                                value = customApiKey,
-                                onValueChange = { viewModel.setCustomApiKey(it) },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("AIzaSy...", fontSize = 12.sp) },
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                shape = RoundedCornerShape(10.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                                )
-                            )
-                        }
+
                     }
                 }
             }
@@ -1053,7 +1018,7 @@ fun TranslatingScreen(state: MainUiState.Translating, onCancelClick: () -> Unit)
                 Spacer(modifier = Modifier.height(4.dp))
                 StepRow(text = "1. PDF Sayfa Çözünürlüğü Optimize Ediliyor", done = state.currentPageIndex > 0)
                 StepRow(text = "2. Comic Balonu & Metin Hücreleri Çıkarılıyor", done = state.currentPageIndex > 0 || state.statusMessage.contains("Çeviriyor"))
-                StepRow(text = "3. Gemini 3.5 Flash Multimodal Analiz & OCR", done = state.statusMessage.contains("Veritabanı") || state.currentPageIndex > 0)
+                StepRow(text = "3. Google Çeviri ile Sayfa Sayfa Çeviriliyor", done = state.statusMessage.contains("Veritabanı") || state.currentPageIndex > 0)
                 StepRow(text = "4. Çeviri, Sözlük & Analizler Kaydediliyor", done = false)
             }
         }
@@ -1905,21 +1870,20 @@ fun HelpGuideDialog(onDismiss: () -> Unit) {
             LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
                 item {
                     Text(
-                        text = "PDF Translator AI, akıllı Gemini 3.5 Multimodal modelini kullanarak PDF sayfalarınızı resim veya metin fark etmeksizin saniyeler içinde analiz eder.",
+                        text = "Google PDF Çevirici, Google Çeviri altyapısını kullanarak PDF sayfalarınızın metinlerini sayfa sayfa hızlı ve güvenilir biçimde çevirir.",
                         fontSize = 12.sp,
                         lineHeight = 18.sp
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(text = "Önemli Özellikler:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = "• Gelişmiş Belge Seçimi: Manga, akademik, teknik el kılavuzuna göre özel yapay zeka yapılandırması.", fontSize = 11.sp)
-                    Text(text = "• Seslendirme (TTS): Çevrilen metni kulaklıkla veya dışarıya sesli okutma.", fontSize = 11.sp)
-                    Text(text = "• Sayfa Özeti Çıkarma: AI motoruna tek tıkla sayfa özeti yaptırma.", fontSize = 11.sp)
-                    Text(text = "• Terim Sözlüğü (Glossary): Çeviride zorunlu kalmasını istediğiniz kelimeleri tanımlama.", fontSize = 11.sp)
-                    Text(text = "• Sayfa Not Defteri: Sayfa bazlı özel çalışma notlarınızı veritabanına kaydetme.", fontSize = 11.sp)
+                    Text(text = "• Hızlı Google Çeviri: Belgeler sayfa sayfa anında çevrilir.", fontSize = 11.sp)
+                    Text(text = "• Seslendirme (TTS): Çevrilen metni sesli okutma imkanı.", fontSize = 11.sp)
+                    Text(text = "• Sayfa Özeti Çıkarma: Çevrilen sayfaların özetini görüntüleme.", fontSize = 11.sp)
+                    Text(text = "• Sayfa Not Defteri: Sayfa bazlı özel çalışma notlarınızı kaydetme.", fontSize = 11.sp)
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "Not: Gemini API'si yüksek doğruluk için belgedeki görsel yerleşimini birebir tarar. Keyifli çeviriler dileriz!",
+                        text = "Not: Herhangi bir giriş veya API anahtarı gerekmez. Keyifli çeviriler dileriz!",
                         fontSize = 10.sp,
                         color = Color.Gray,
                         lineHeight = 14.sp
@@ -1967,478 +1931,10 @@ private fun getFileName(context: Context, uri: Uri): String? {
 
 @Composable
 fun AuthScreen(viewModel: TranslationViewModel) {
-    var emailInput by remember { mutableStateOf("") }
-    var nameInput by remember { mutableStateOf("") }
-    var passwordInput by remember { mutableStateOf("") }
-    var isPasswordVisible by remember { mutableStateOf(false) }
-    var rememberSession by remember { mutableStateOf(true) }
-    
-    val authLoading by viewModel.authLoading.collectAsState()
-    val context = LocalContext.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceContainerLowest,
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-                .widthIn(max = 450.dp)
-                .shadow(12.dp, RoundedCornerShape(28.dp)),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(32.dp)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Header Logo
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(16.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                Text(
-                    text = "PDF Translator AI",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Text(
-                    text = "Dökümanlarınızı Akıllı Yapay Zeka ile Anında Çevirin",
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (authLoading) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.padding(vertical = 32.dp)
-                    ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            text = "Güvenli Oturum Açılıyor...",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else {
-                    // Google Sign-In & Email Tabs
-                    var selectedTab by remember { mutableStateOf(0) }
-                    TabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = Color.Transparent,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            text = { Text("Google Girişi", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
-                        )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            text = { Text("E-Posta", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (selectedTab == 0) {
-                        // Google Sign-In Mode
-                        Text(
-                            text = "Google hesabınızla tek tıkla güvenli giriş yapın veya kayıt olun.",
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 18.sp
-                        )
-
-                        OutlinedTextField(
-                            value = emailInput,
-                            onValueChange = { emailInput = it },
-                            label = { Text("Google E-Posta Adresiniz") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        )
-
-                        // Google Brand styled button
-                        Button(
-                            onClick = {
-                                val email = emailInput.ifBlank { "user@gmail.com" }
-                                val name = email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                                viewModel.performGoogleSignIn(email, name, rememberSession)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFF2F2F2),
-                                contentColor = Color(0xFF1F1F1F)
-                            ),
-                            border = BorderStroke(1.dp, Color(0xFFE0E0E0))
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .background(Color.White, shape = CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "G",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = Color(0xFF4285F4)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "Google ile Oturum Aç",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-
-                    } else {
-                        // Email signup/login
-                        var isSignUpMode by remember { mutableStateOf(false) }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (!isSignUpMode) {
-                                Button(
-                                    onClick = { isSignUpMode = false },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Giriş Yap", fontWeight = FontWeight.Bold)
-                                }
-                                OutlinedButton(
-                                    onClick = { isSignUpMode = true },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Yeni Kayıt", fontWeight = FontWeight.Bold)
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { isSignUpMode = false },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Giriş Yap", fontWeight = FontWeight.Bold)
-                                }
-                                Button(
-                                    onClick = { isSignUpMode = true },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Yeni Kayıt", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        if (isSignUpMode) {
-                            OutlinedTextField(
-                                value = nameInput,
-                                onValueChange = { nameInput = it },
-                                label = { Text("Adınız Soyadınız") },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = emailInput,
-                            onValueChange = { emailInput = it },
-                            label = { Text("E-Posta Adresiniz") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = passwordInput,
-                            onValueChange = { passwordInput = it },
-                            label = { Text("Şifre") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                            trailingIcon = {
-                                IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                                    Icon(
-                                        imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        Button(
-                            onClick = {
-                                if (isSignUpMode) {
-                                    viewModel.performEmailSignUp(emailInput, passwordInput, nameInput, rememberSession)
-                                } else {
-                                    viewModel.performEmailSignIn(emailInput, passwordInput, rememberSession)
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        ) {
-                            Text(if (isSignUpMode) "Kayıt Ol ve Giriş Yap" else "Güvenli Giriş Yap", fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    // Persistent Session Checkbox
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { rememberSession = !rememberSession }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        androidx.compose.material3.Checkbox(
-                            checked = rememberSession,
-                            onCheckedChange = { rememberSession = it }
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Oturumumu sürekli açık tut",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // AI Auto-Fetch details card
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Yapay Zeka API Entegrasyonu",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Text(
-                                text = "Giriş yaptıktan sonra, AI Studio tarafından sağlanan güvenli Gemini API Anahtarı arka planda otomatik olarak etkinleştirilir. Ek ayar yapmanıza gerek kalmaz.",
-                                fontSize = 10.sp,
-                                lineHeight = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Auth screen removed - app opens directly
 }
 
 @Composable
 fun ProfileDialog(viewModel: TranslationViewModel, onDismiss: () -> Unit) {
-    val userName by viewModel.userName.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
-    val userAvatarIndex by viewModel.userAvatarIndex.collectAsState()
-    val customApiKey by viewModel.customApiKey.collectAsState()
-
-    val avatarColors = listOf(
-        Color(0xFFE57373), Color(0xFFF06292), Color(0xFFBA68C8),
-        Color(0xFF9575CD), Color(0xFF7986CB), Color(0xFF64B5F6),
-        Color(0xFF4FC3F7), Color(0xFF4DB6AC), Color(0xFF81C784)
-    )
-    val avatarColor = avatarColors[userAvatarIndex % avatarColors.size]
-
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("Kapat")
-            }
-        },
-        dismissButton = {
-            androidx.compose.material3.OutlinedButton(
-                onClick = {
-                    viewModel.performSignOut()
-                    onDismiss()
-                },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
-            ) {
-                Icon(imageVector = Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Oturumu Kapat")
-            }
-        },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Kullanıcı Profili")
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Large Avatar
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .background(avatarColor, shape = CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = userName.take(1).uppercase(Locale.getDefault()),
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = userName,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = userEmail,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Session Status Card
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Persistent Session Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Oturum Durumu:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(Color(0xFF4CAF50), shape = CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Sürekli Açık (Aktif)", fontSize = 12.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Medium)
-                            }
-                        }
-
-                        // API Key Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Gemini API Durumu:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                text = if (customApiKey.isNotEmpty()) "Özel API Anahtarı Aktif" else "Sistem-Geneli Ücretsiz Key",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        shape = RoundedCornerShape(24.dp)
-    )
+    // Profile dialog removed
 }
