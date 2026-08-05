@@ -35,6 +35,7 @@ data class TranslatedPage(
     val translationHistoryId: Int,
     val pageNumber: Int,
     val originalPagePath: String?, // Absolute file path to the cached original page bitmap
+    val originalText: String = "", // Raw ML Kit OCR or extracted text before translation
     val translatedText: String,
     val confidenceScore: String = "100%", // From Gemini
     val keyVocabulary: String = "",       // Comma separated terms

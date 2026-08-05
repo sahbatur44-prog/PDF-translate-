@@ -96,8 +96,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -1004,6 +1006,66 @@ fun TranslatingScreen(state: MainUiState.Translating, onCancelClick: () -> Unit)
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // ML Kit Live OCR Raw Text Inspection Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "ML Kit OCR Ham Metin Tespiti (Canlı)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = "${state.ocrRawText.length} karakter",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 130.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    LazyColumn(modifier = Modifier.padding(8.dp)) {
+                        item {
+                            Text(
+                                text = state.ocrRawText.ifBlank { "Metin tespiti bekleniyor..." },
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (state.ocrRawText.isNotBlank()) MaterialTheme.colorScheme.onSurface else Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -1064,7 +1126,7 @@ fun ViewTranslationScreen(
     val clipboardManager = LocalClipboardManager.current
 
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabTitles = listOf("Çift Panel (Split)", "Sadece Çeviri", "AI Analizleri")
+    val tabTitles = listOf("Çift Panel", "Sadece Çeviri", "Ham OCR Metni", "AI Analizleri")
 
     var currentPageIndex by remember { mutableStateOf(0) }
     val totalPages = state.pages.size
@@ -1325,7 +1387,65 @@ fun ViewTranslationScreen(
                         }
                     }
                     2 -> {
-                        // Tab 3: AI Analizleri (Confidence, Summary, Vocabulary & Notebook!)
+                        // Tab 3: Orijinal OCR Metni (ML Kit ile algılanan ham metin)
+                        Card(
+                            modifier = Modifier.fillMaxSize(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "ML Kit OCR Ham Çıktısı",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        )
+                                        Text(
+                                            text = "Orijinal sayfadan okunan metin tespiti",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+
+                                    IconButton(onClick = {
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(activePage.originalText.ifBlank { "Metin bulunamadı." }))
+                                        Toast.makeText(context, "OCR metni panoya kopyalandı!", Toast.LENGTH_SHORT).show()
+                                    }) {
+                                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Ham Metni Kopyala")
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Surface(
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                                        item {
+                                            Text(
+                                                text = activePage.originalText.ifBlank { "Bu sayfa için ham OCR metni bulunamadı veya boş algılandı." },
+                                                fontSize = 13.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                lineHeight = 19.sp,
+                                                color = if (activePage.originalText.isNotBlank()) MaterialTheme.colorScheme.onSurface else Color.Gray
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    3 -> {
+                        // Tab 4: AI Analizleri (Confidence, Summary, Vocabulary & Notebook!)
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp)

@@ -40,7 +40,8 @@ sealed interface MainUiState {
         val fileName: String,
         val totalPages: Int,
         val currentPageIndex: Int,
-        val statusMessage: String
+        val statusMessage: String,
+        val ocrRawText: String = ""
     ) : MainUiState
     data class ViewTranslation(
         val historyItem: TranslationHistory,
@@ -423,7 +424,9 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
                     val pageBitmap = withContext(Dispatchers.IO) {
                         val page = renderer.openPage(pageIndex)
-                        val targetWidth = if (page.width > 1200) 1200 else page.width
+                        // Scale to at least 1800px width for high resolution OCR on small text & comic speech bubbles
+                        val scale = 2.5f
+                        val targetWidth = (page.width * scale).toInt().coerceAtLeast(1800).coerceAtMost(2800)
                         val targetHeight = (targetWidth.toFloat() / page.width * page.height).toInt()
                         val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
                         val canvas = android.graphics.Canvas(bitmap)
@@ -450,7 +453,6 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
                     // First perform OCR on rendered page Bitmap (ideal for image-based PDFs & scanned docs)
                     val ocrPageText = PdfTextExtractor.recognizeTextFromBitmap(pageBitmap)
-                    Log.d("TranslationVM", "Page ${pageIndex + 1} OCR Output length: ${ocrPageText.length}, text snippet: '${ocrPageText.take(100)}'")
 
                     val rawPageText = if (ocrPageText.isNotBlank()) {
                         ocrPageText
@@ -459,13 +461,16 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                     } else {
                         ""
                     }
-                    Log.d("TranslationVM", "Page ${pageIndex + 1} Final Raw Text to Translate: '$rawPageText'")
+
+                    // Explicit diagnostic logging before translation step
+                    PdfTextExtractor.logDiagnosticOcrResult(pageIndex, ocrPageText, rawPageText)
 
                     _uiState.value = MainUiState.Translating(
                         fileName = resolvedFileName,
                         totalPages = totalPages,
                         currentPageIndex = pageIndex,
-                        statusMessage = "Sayfa ${pageIndex + 1} / $totalPages: Google Çeviri Yapılıyor..."
+                        statusMessage = "Sayfa ${pageIndex + 1} / $totalPages: Google Çeviri Yapılıyor...",
+                        ocrRawText = ocrPageText.ifBlank { rawPageText }
                     )
 
                     val translatedPageText = withContext(Dispatchers.IO) {
@@ -491,6 +496,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                                 translationHistoryId = historyId,
                                 pageNumber = pageIndex + 1,
                                 originalPagePath = cachedImagePath,
+                                originalText = rawPageText,
                                 translatedText = translatedPageText,
                                 confidenceScore = "100%",
                                 keyVocabulary = "",

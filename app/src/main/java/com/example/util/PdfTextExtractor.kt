@@ -23,13 +23,26 @@ object PdfTextExtractor {
             val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
             val task = recognizer.process(image)
             val result = Tasks.await(task)
-            val text = result.text.trim()
-            Log.d("PdfTextExtractor", "MLKit Raw OCR Output: '$text'")
-            cleanText(text)
+            val rawText = result.text.trim()
+            Log.d("PdfTextExtractor", "MLKit RAW OCR Output (Page): '$rawText'")
+            rawText
         } catch (e: Exception) {
             Log.e("PdfTextExtractor", "MLKit OCR Error: ${e.message}", e)
             ""
         }
+    }
+
+    /**
+     * Performs explicit diagnostic logging for ML Kit OCR raw string detection before sanitization or translation.
+     */
+    fun logDiagnosticOcrResult(pageIndex: Int, rawOcrText: String, sanitizedText: String) {
+        Log.d("OCR_DIAGNOSTIC", "==========================================================")
+        Log.d("OCR_DIAGNOSTIC", "DIAGNOSTIC OCR READOUT FOR PAGE ${pageIndex + 1}")
+        Log.d("OCR_DIAGNOSTIC", "RAW ML KIT DETECTED TEXT LENGTH: ${rawOcrText.length}")
+        Log.d("OCR_DIAGNOSTIC", "RAW ML KIT DETECTED TEXT:\n$rawOcrText")
+        Log.d("OCR_DIAGNOSTIC", "SANITY CLEANED TEXT LENGTH: ${sanitizedText.length}")
+        Log.d("OCR_DIAGNOSTIC", "SANITY CLEANED TEXT:\n$sanitizedText")
+        Log.d("OCR_DIAGNOSTIC", "==========================================================")
     }
 
     /**
