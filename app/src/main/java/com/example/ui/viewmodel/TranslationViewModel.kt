@@ -445,23 +445,38 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                         fileName = resolvedFileName,
                         totalPages = totalPages,
                         currentPageIndex = pageIndex,
+                        statusMessage = "Sayfa ${pageIndex + 1} / $totalPages: OCR Metin Taraması Yapılıyor..."
+                    )
+
+                    // First perform OCR on rendered page Bitmap (ideal for image-based PDFs & scanned docs)
+                    val ocrPageText = PdfTextExtractor.recognizeTextFromBitmap(pageBitmap)
+
+                    val rawPageText = if (ocrPageText.isNotBlank()) {
+                        ocrPageText
+                    } else if (pageIndex < pdfExtractedPagesText.size && pdfExtractedPagesText[pageIndex].isNotBlank()) {
+                        PdfTextExtractor.cleanText(pdfExtractedPagesText[pageIndex])
+                    } else {
+                        ""
+                    }
+
+                    _uiState.value = MainUiState.Translating(
+                        fileName = resolvedFileName,
+                        totalPages = totalPages,
+                        currentPageIndex = pageIndex,
                         statusMessage = "Sayfa ${pageIndex + 1} / $totalPages: Google Çeviri Yapılıyor..."
                     )
 
-                    // Get extracted text for page or placeholder
-                    val rawPageText = if (pageIndex < pdfExtractedPagesText.size && pdfExtractedPagesText[pageIndex].isNotBlank()) {
-                        pdfExtractedPagesText[pageIndex]
-                    } else {
-                        "Sayfa ${pageIndex + 1} metni"
-                    }
-
                     val translatedPageText = withContext(Dispatchers.IO) {
                         try {
-                            GoogleTranslateClient.translateText(
-                                text = rawPageText,
-                                sourceLang = _sourceLang.value,
-                                targetLang = _targetLang.value
-                            )
+                            if (rawPageText.isBlank()) {
+                                "Sayfada okunabilir metin bulunamadı."
+                            } else {
+                                GoogleTranslateClient.translateText(
+                                    text = rawPageText,
+                                    sourceLang = _sourceLang.value,
+                                    targetLang = _targetLang.value
+                                )
+                            }
                         } catch (e: Exception) {
                             Log.e("TranslationVM", "Google translate error page $pageIndex", e)
                             "Çeviri hatası (Sayfa ${pageIndex + 1}): ${e.localizedMessage}"

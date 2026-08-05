@@ -1,14 +1,38 @@
 package com.example.util
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object PdfTextExtractor {
 
     /**
-     * Extracts text page by page from a local PDF Uri or InputStream.
-     * Returns a map or list of string page contents.
+     * Performs OCR on a given page Bitmap using Google ML Kit Text Recognition.
+     * Perfect for Image-to-PDF, scanned documents, and comics.
+     */
+    suspend fun recognizeTextFromBitmap(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
+        try {
+            val image = InputImage.fromBitmap(bitmap, 0)
+            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+            val task = recognizer.process(image)
+            val result = Tasks.await(task)
+            val text = result.text.trim()
+            cleanText(text)
+        } catch (e: Exception) {
+            Log.e("PdfTextExtractor", "MLKit OCR Error: ${e.message}", e)
+            ""
+        }
+    }
+
+    /**
+     * Extracts text page by page from a local PDF Uri as fallback.
      */
     fun extractTextFromPdf(context: Context, uri: Uri): List<String> {
         val pagesText = mutableListOf<String>()
@@ -21,8 +45,9 @@ object PdfTextExtractor {
                 if (streamBlocks.isNotEmpty()) {
                     for (block in streamBlocks) {
                         val extracted = parsePdfTextStream(block)
-                        if (extracted.isNotBlank()) {
-                            pagesText.add(extracted)
+                        val cleaned = cleanText(extracted)
+                        if (cleaned.isNotBlank()) {
+                            pagesText.add(cleaned)
                         }
                     }
                 }
@@ -67,9 +92,9 @@ object PdfTextExtractor {
                     val closeParen = findClosingParen(textBlock, i)
                     if (closeParen != -1) {
                         val rawText = textBlock.substring(i + 1, closeParen)
-                        val cleaned = decodePdfString(rawText)
-                        if (cleaned.isNotBlank()) {
-                            sb.append(cleaned).append(" ")
+                        val decoded = decodePdfString(rawText)
+                        if (decoded.isNotBlank()) {
+                            sb.append(decoded).append(" ")
                         }
                         i = closeParen + 1
                         continue
@@ -84,9 +109,9 @@ object PdfTextExtractor {
                                 val cParen = findClosingParen(bracketContent, j)
                                 if (cParen != -1) {
                                     val rawText = bracketContent.substring(j + 1, cParen)
-                                    val cleaned = decodePdfString(rawText)
-                                    if (cleaned.isNotBlank()) {
-                                        sb.append(cleaned)
+                                    val decoded = decodePdfString(rawText)
+                                    if (decoded.isNotBlank()) {
+                                        sb.append(decoded)
                                     }
                                     j = cParen + 1
                                     continue
@@ -146,5 +171,23 @@ object PdfTextExtractor {
             }
         }
         return sb.toString()
+    }
+
+    /**
+     * Cleans control characters and verifies text sanity.
+     * Prevents garbled binary stream data from being treated as text.
+     */
+    fun cleanText(input: String): String {
+        if (input.isBlank()) return ""
+        // Filter out non-printable ASCII / control characters
+        val filtered = input.replace(Regex("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F]"), "")
+        var printableCount = 0
+        for (c in filtered) {
+            if (c.isLetterOrDigit() || c.isWhitespace() || c in ".,!?:;\"'()-+/*=@#$%&[]{}|/\\çğıöşüÇĞİÖŞÜ") {
+                printableCount++
+            }
+        }
+        val ratio = if (filtered.isNotEmpty()) printableCount.toDouble() / filtered.length else 0.0
+        return if (ratio > 0.65) filtered.trim() else ""
     }
 }
