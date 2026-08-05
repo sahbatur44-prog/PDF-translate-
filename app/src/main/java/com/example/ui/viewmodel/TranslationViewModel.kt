@@ -450,6 +450,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
                     // First perform OCR on rendered page Bitmap (ideal for image-based PDFs & scanned docs)
                     val ocrPageText = PdfTextExtractor.recognizeTextFromBitmap(pageBitmap)
+                    Log.d("TranslationVM", "Page ${pageIndex + 1} OCR Output length: ${ocrPageText.length}, text snippet: '${ocrPageText.take(100)}'")
 
                     val rawPageText = if (ocrPageText.isNotBlank()) {
                         ocrPageText
@@ -458,6 +459,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                     } else {
                         ""
                     }
+                    Log.d("TranslationVM", "Page ${pageIndex + 1} Final Raw Text to Translate: '$rawPageText'")
 
                     _uiState.value = MainUiState.Translating(
                         fileName = resolvedFileName,

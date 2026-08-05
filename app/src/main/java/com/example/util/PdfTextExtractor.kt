@@ -24,6 +24,7 @@ object PdfTextExtractor {
             val task = recognizer.process(image)
             val result = Tasks.await(task)
             val text = result.text.trim()
+            Log.d("PdfTextExtractor", "MLKit Raw OCR Output: '$text'")
             cleanText(text)
         } catch (e: Exception) {
             Log.e("PdfTextExtractor", "MLKit OCR Error: ${e.message}", e)
@@ -174,20 +175,24 @@ object PdfTextExtractor {
     }
 
     /**
-     * Cleans control characters and verifies text sanity.
-     * Prevents garbled binary stream data from being treated as text.
+     * Cleans control characters and verifies basic text sanity.
+     * Prevents raw binary stream data while preserving valid OCR text (English, Turkish, UTF-8).
      */
     fun cleanText(input: String): String {
         if (input.isBlank()) return ""
-        // Filter out non-printable ASCII / control characters
-        val filtered = input.replace(Regex("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F]"), "")
+        // Remove unprintable control characters
+        val cleaned = input.replace(Regex("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]"), "").trim()
+        if (cleaned.isBlank()) return ""
+
+        // Check for severe binary garbage (e.g. raw PDF font stream bytes)
         var printableCount = 0
-        for (c in filtered) {
-            if (c.isLetterOrDigit() || c.isWhitespace() || c in ".,!?:;\"'()-+/*=@#$%&[]{}|/\\çğıöşüÇĞİÖŞÜ") {
+        for (c in cleaned) {
+            if (c.isLetterOrDigit() || c.isWhitespace() || Character.isLetter(c) || c in ".,!?:;\"'()’‘“”«»-+/*=@#$%&[]{}|/\\çğıöşüÇĞİÖŞÜ") {
                 printableCount++
             }
         }
-        val ratio = if (filtered.isNotEmpty()) printableCount.toDouble() / filtered.length else 0.0
-        return if (ratio > 0.65) filtered.trim() else ""
+        val ratio = printableCount.toDouble() / cleaned.length
+        // Only drop if less than 30% of characters are printable/readable (indicating binary stream noise)
+        return if (ratio >= 0.30) cleaned else ""
     }
 }
